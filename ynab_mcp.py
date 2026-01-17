@@ -565,6 +565,11 @@ def ynab_get_payees(params: GetPayeesInput) -> str:
         return handle_api_error(e)
 
 
+class TransactionType(str, Enum):
+    UNAPPROVED = "unapproved"
+    UNCATEGORIZED = "uncategorized"
+
+
 class GetTransactionsInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     budget_id: str = Field(..., description="The budget ID", min_length=1)
@@ -575,6 +580,10 @@ class GetTransactionsInput(BaseModel):
         None,
         description="Only return transactions on or after this date (YYYY-MM-DD)",
         pattern=r"^\d{4}-\d{2}-\d{2}$"
+    )
+    transaction_type: Optional[TransactionType] = Field(
+        None,
+        description="Filter by type: 'unapproved' or 'uncategorized'"
     )
     output_to_file: bool = Field(
         default=True,
@@ -610,28 +619,34 @@ def ynab_get_transactions(params: GetTransactionsInput) -> str:
         with get_api_client() as api_client:
             api = ynab.TransactionsApi(api_client)
 
+            txn_type = params.transaction_type.value if params.transaction_type else None
+
             if params.account_id:
                 response = api.get_transactions_by_account(
                     params.budget_id,
                     params.account_id,
-                    since_date=params.since_date
+                    since_date=params.since_date,
+                    type=txn_type
                 )
             elif params.category_id:
                 response = api.get_transactions_by_category(
                     params.budget_id,
                     params.category_id,
-                    since_date=params.since_date
+                    since_date=params.since_date,
+                    type=txn_type
                 )
             elif params.payee_id:
                 response = api.get_transactions_by_payee(
                     params.budget_id,
                     params.payee_id,
-                    since_date=params.since_date
+                    since_date=params.since_date,
+                    type=txn_type
                 )
             else:
                 response = api.get_transactions(
                     params.budget_id,
-                    since_date=params.since_date
+                    since_date=params.since_date,
+                    type=txn_type
                 )
 
             transactions = [transform_transaction(t.to_dict()) for t in response.data.transactions]
